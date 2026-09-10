@@ -24,10 +24,11 @@ import org.apache.velocity.runtime.RuntimeConstants;
 import org.apache.velocity.runtime.resource.loader.StringResourceLoader;
 
 /**
- * Tests the gated VTL syntax deprecation warnings (VELOCITY-995): the informal
- * {@code $foo.bar} notation in output position, and the {@code |} default-value
- * operator. The warning fires at parse/init time and is independent of whether the
- * reference resolves, so the templates need no context.
+ * Tests the gated VTL syntax deprecation warnings (VELOCITY-995): the {@code |}
+ * spelling of the alternate value, the extra {@code $} of {@code ${$foo}}, and the
+ * {@code parser.allow_hyphen_in_identifiers} option. The warning fires at parse/init
+ * time and is independent of whether the reference resolves, so the templates need no
+ * context.
  */
 public class DeprecationWarningTestCase extends BaseTestCase
 {
@@ -64,51 +65,55 @@ public class DeprecationWarningTestCase extends BaseTestCase
                     out.contains("deprecated"));
     }
 
-    /* ---- informal notation in output position: deprecated ---- */
+    /* ---- notations that are NOT deprecated: regression pins that nothing warns ----
+     *
+     * The informal $foo.bar notation was deprecated by 2.5-RC1 and is not any more:
+     * it renders out of the box on the next major version's compatibility surface.
+     */
 
-    public void testInformalDottedInOutputWarns()
-    {
-        assertWarns("$foo.bar");
-        assertWarns("$foo.bar()");
-        assertWarns("$!foo.bar");          // quiet informal still informal
-    }
-
-    public void testBareReferenceNeverWarns()
+    public void testReferenceNotationsNeverWarn()
     {
         assertNoWarn("$foo");
         assertNoWarn("$!foo");
-    }
-
-    public void testFormalNotationNeverWarns()
-    {
+        assertNoWarn("$foo.bar");
+        assertNoWarn("$foo.bar()");
+        assertNoWarn("$!foo.bar");
         assertNoWarn("${foo.bar}");
-        assertNoWarn("$!{foo.bar}");       // quiet + formal: formal flag must be set
-    }
-
-    /* ---- informal notation outside output position: safe ---- */
-
-    public void testInformalSafeInExpressionContexts()
-    {
-        assertNoWarn("#set($x = $foo.bar)");          // set RHS
-        assertNoWarn("#if($foo.bar)#end");            // directive argument
-        assertNoWarn("#foreach($x in $foo.bar)#end"); // directive argument
-    }
-
-    public void testSingleQuotedStringIsInert()
-    {
+        assertNoWarn("$!{foo.bar}");
+        assertNoWarn("#set($x = \"$foo.bar\")");
         assertNoWarn("#set($x = '$foo.bar')");
+        assertNoWarn("#if($foo.bar)#end");
+        assertNoWarn("#foreach($x in $foo.bar)#end");
     }
 
-    public void testInterpolatedStringCountsAsOutput()
-    {
-        assertWarns("#set($x = \"$foo.bar\")");
-    }
+    /* ---- the '|' spelling of the alternate value: deprecated in favour of '?:' ---- */
 
-    /* ---- the '|' default-value operator: always deprecated ---- */
-
-    public void testPipeDefaultWarns()
+    public void testPipeAlternateValueWarns()
     {
         assertWarns("${foo|'bar'}");
+        assertWarns("$!{foo|'bar'}");
+        assertWarns("${foo.bar()[1]|'bar'}");
+    }
+
+    public void testPipeWarningNamesTheElvisSpelling()
+    {
+        String out = warningsFor("${foo|'bar'}");
+        assertTrue("the warning must point at the '?:' spelling, log was:\n" + out,
+                   out.contains("${foo?:alt}"));
+    }
+
+    public void testElvisAlternateValueNeverWarns()
+    {
+        assertNoWarn("${foo?:'bar'}");
+        assertNoWarn("$!{foo?:'bar'}");
+        assertNoWarn("${foo.bar()[1]?:'bar'}");
+    }
+
+    public void testOnlyThePipeSpellingWarnsWhenBothAreMixed()
+    {
+        String out = warningsFor("${foo?:'a'}${bar|'b'}${baz?:'c'}");
+        assertEquals("exactly one warning expected, log was:\n" + out,
+                     1, out.split("alternate-value notation is deprecated", -1).length - 1);
     }
 
     /* ---- the extra '$' after '{' (${$foo}): always deprecated, but still formal ---- */
@@ -118,14 +123,6 @@ public class DeprecationWarningTestCase extends BaseTestCase
         assertWarns("${$foo}");
         assertWarns("${$foo.bar}");
         assertWarns("$!{$foo}");
-    }
-
-    public void testExtraDollarStillFormalNoInformalWarning()
-    {
-        // ${$foo.bar} must warn once (extra '$'), not also as informal notation
-        String out = warningsFor("${$foo.bar}");
-        assertTrue(out.contains("extra '$'"));
-        assertFalse(out.contains("informal"));
     }
 
     public void testFormalWithoutExtraDollarNeverWarns()
@@ -170,20 +167,37 @@ public class DeprecationWarningTestCase extends BaseTestCase
         assertFalse(warningsAtInit(hyphenEngine(false, true)).contains("allow_hyphen_in_identifiers"));
     }
 
-    /* ---- off by default ---- */
+    /* ---- on by default, silenced explicitly ---- */
 
-    public void testNoWarningWhenPropertyDisabled() throws Exception
+    private String warningsWithoutSetting(String vtl, String deprecationWarn)
     {
         VelocityEngine plain = new VelocityEngine();
         plain.setProperty(RuntimeConstants.RUNTIME_LOG_INSTANCE, log);
         plain.setProperty(RuntimeConstants.RESOURCE_LOADERS, "string");
         plain.addProperty("resource.loader.string.class", StringResourceLoader.class.getName());
+        if (deprecationWarn != null)
+        {
+            plain.setProperty(RuntimeConstants.RUNTIME_DEPRECATION_WARN, deprecationWarn);
+        }
         plain.init();
 
         log.startCapture();
-        evaluate("$foo.bar and ${baz|'x'}", plain);
+        evaluate(vtl, plain);
         log.stopCapture();
-        assertFalse("no warning expected with runtime.deprecation.warn unset, log was:\n" + log.getLog(),
-                    log.getLog().contains("deprecated"));
+        return log.getLog();
+    }
+
+    public void testWarningIsOnByDefault() throws Exception
+    {
+        String out = warningsWithoutSetting("${baz|'x'}", null);
+        assertTrue("a warning is expected with runtime.deprecation.warn left alone, log was:\n" + out,
+                   out.contains("deprecated"));
+    }
+
+    public void testExplicitFalseSilencesTheWarning() throws Exception
+    {
+        String out = warningsWithoutSetting("${baz|'x'}${$foo}", "false");
+        assertFalse("no warning expected with runtime.deprecation.warn = false, log was:\n" + out,
+                    out.contains("deprecated"));
     }
 }

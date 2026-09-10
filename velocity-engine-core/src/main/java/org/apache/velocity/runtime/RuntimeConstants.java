@@ -473,7 +473,7 @@ public interface RuntimeConstants extends DeprecatedRuntimeConstants
     /** Switch for the immutability of integer ranges. */
     String IMMUTABLE_RANGES = "runtime.immutable_ranges";
 
-    /** Whether to warn about deprecated VTL syntax constructs (off by default, will be turned on in the next 2.x release). */
+    /** Whether to warn about deprecated VTL syntax constructs (on by default). */
     String RUNTIME_DEPRECATION_WARN = "runtime.deprecation.warn";
 
     /** Switch for ignoring nulls in math equations vs throwing exceptions. */

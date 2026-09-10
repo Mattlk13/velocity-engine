@@ -44,12 +44,10 @@
             <code>BigDecimal</code> in VTL math operations.
         </action>
         <action type="add" dev="cbrisson" issue="VELOCITY-995">
-            Add deprecation warnings for VTL syntax constructs not supported by the
-            next major version: the informal <code>$foo.bar</code> notation rendered
-            to output, the <code>${foo|default}</code> default-value operator, the
-            extra <code>$</code> in <code>${$foo}</code>, and the
-            <code>parser.allow_hyphen_in_identifiers</code> backward compatibility option.
-            Gated by the new <code>runtime.deprecation.warn</code> property, off by default for now.
+            Deprecate <code>${foo|bar}</code> in favor of <code>${foo?:bar}</code>, along with
+            the extra <code>$</code> in <code>${$foo}</code> and the
+            <code>parser.allow_hyphen_in_identifiers</code> option; warnings gated by
+            <code>runtime.deprecation.warn</code>, on by default.
         </action>
         <action type="update" dev="cbrisson" issue="VELOCITY-994">
             <code>spring-velocity-support</code> now targets the current, Jakarta-based

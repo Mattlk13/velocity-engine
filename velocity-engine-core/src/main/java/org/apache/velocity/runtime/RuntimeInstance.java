@@ -408,7 +408,7 @@ public class RuntimeInstance implements RuntimeConstants, RuntimeServices
      */
     private void warnDeprecatedSettings()
     {
-        if (getBoolean(RUNTIME_DEPRECATION_WARN, false) && hyphenAllowedInIdentifiers)
+        if (getBoolean(RUNTIME_DEPRECATION_WARN, true) && hyphenAllowedInIdentifiers)
         {
             log.warn("the '{}' option is deprecated: hyphenated identifiers (e.g. $foo-bar) cannot be expressed in the next major version", PARSER_HYPHEN_ALLOWED);
         }

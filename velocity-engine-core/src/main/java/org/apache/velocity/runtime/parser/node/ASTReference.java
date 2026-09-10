@@ -103,9 +103,16 @@ public class ASTReference extends SimpleNode
 
     /**
      * Whether this reference uses the formal curly-brace notation: ${...} or $!{...}.
-     * Set by the parser; distinguishes ${foo.bar} from the deprecated informal $foo.bar.
+     * Set by the parser; distinguishes ${foo.bar} from the informal $foo.bar.
      */
     private boolean formal = false;
+
+    /**
+     * Whether the alternate value of this reference, if any, was written with the
+     * deprecated pipe notation ${foo|alt} rather than the elvis one ${foo?:alt}.
+     * Set by the parser.
+     */
+    private boolean pipeAlternate = false;
 
     /**
      * Whether this reference carries the deprecated extra '$' after '{', as in ${$foo}
@@ -167,6 +174,16 @@ public class ASTReference extends SimpleNode
     public void setFormal(boolean formal)
     {
         this.formal = formal;
+    }
+
+    /**
+     * Marks the alternate value of this reference as written with the deprecated pipe
+     * notation. Called by the parser.
+     * @param pipeAlternate pipe-spelling flag
+     */
+    public void setPipeAlternate(boolean pipeAlternate)
+    {
+        this.pipeAlternate = pipeAlternate;
     }
 
     /**
@@ -234,31 +251,21 @@ public class ASTReference extends SimpleNode
         }
 
         /*
-         * VTL syntax deprecation warnings (VELOCITY-995), gated and off by default.
-         * The '|' default-value operator is always deprecated. Informal notation is
-         * ambiguous only when rendered to output, so it is flagged solely for
-         * references that are a direct child of a rendered block.
+         * VTL syntax deprecation warnings (VELOCITY-995), gated by runtime.deprecation.warn.
+         * The '|' spelling of the alternate value is deprecated in favour of '?:', which
+         * has the very same semantics; the extra '$' in ${$foo} is deprecated outright.
          */
-        if (rsvc.getBoolean(RuntimeConstants.RUNTIME_DEPRECATION_WARN, false))
+        if (rsvc.getBoolean(RuntimeConstants.RUNTIME_DEPRECATION_WARN, true))
         {
-            if (astAlternateValue != null)
+            if (astAlternateValue != null && pipeAlternate)
             {
-                log.warn("the '|' default-value notation is deprecated; use an #if(...)...#{else}...#end block instead - {} [line {}, column {}]",
+                log.warn("the '|' alternate-value notation is deprecated; write ${foo?:alt} rather than ${foo|alt} - {} [line {}, column {}]",
                          getTemplateName(), getLine(), getColumn());
             }
             if (extraDollar)
             {
                 log.warn("the extra '$' after '{' is deprecated; write ${foo} rather than ${$foo} - {} [line {}, column {}]",
                          getTemplateName(), getLine(), getColumn());
-            }
-            if (!formal && numChildren > 0)
-            {
-                Node parent = jjtGetParent();
-                if (parent instanceof ASTBlock || parent instanceof ASTprocess)
-                {
-                    log.warn("the informal notation '{}' is deprecated in output; use the formal notation ${...} instead - {} [line {}, column {}]",
-                             literal(), getTemplateName(), getLine(), getColumn());
-                }
             }
         }
 
